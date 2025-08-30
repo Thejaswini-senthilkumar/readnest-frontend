@@ -81,6 +81,7 @@ export default function Dashboard() {
         <RightSidebar 
           isOpen={isRightSidebarOpen} 
           currentArticle={currentArticle}
+          onClose={handleToggleRightSidebar}
         />
       </div>
     </div>

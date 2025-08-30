@@ -15,6 +15,8 @@ interface Article {
 export default function Feed() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [showAddFeed, setShowAddFeed] = useState(false);
+  const [rssUrl, setRssUrl] = useState('');
 
   // Mock data
   const articles: Article[] = [
@@ -59,6 +61,16 @@ export default function Feed() {
     setSelectedArticle(article);
   };
 
+  const handleAddFeed = () => {
+    if (rssUrl.trim()) {
+      // Here you would typically make an API call to add the RSS feed
+      console.log('Adding RSS feed:', rssUrl);
+      setRssUrl('');
+      setShowAddFeed(false);
+      // You could add a success message or update the feed list here
+    }
+  };
+
   return (
     <div className="h-full flex">
       {/* Feed List */}
@@ -70,6 +82,12 @@ export default function Feed() {
               Feed
             </h2>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAddFeed(!showAddFeed)}
+                className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              >
+                + Add RSS Feed
+              </button>
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded ${viewMode === 'list' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
@@ -88,6 +106,40 @@ export default function Feed() {
               </button>
             </div>
           </div>
+          
+          {/* Add RSS Feed Form */}
+          {showAddFeed && (
+            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex items-center gap-3">
+                <input
+                  type="url"
+                  value={rssUrl}
+                  onChange={(e) => setRssUrl(e.target.value)}
+                  placeholder="Enter RSS feed URL (e.g., https://example.com/feed.xml)"
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  onClick={handleAddFeed}
+                  disabled={!rssUrl.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  Add Feed
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddFeed(false);
+                    setRssUrl('');
+                  }}
+                  className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Popular RSS feeds: TechCrunch, Ars Technica, The Verge, etc.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Articles List */}
@@ -170,6 +222,14 @@ export default function Feed() {
                 </button>
                 <button className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
                   Save to Journal
+                </button>
+                <button 
+                  onClick={() => setSelectedArticle(null)}
+                  className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
             </div>
