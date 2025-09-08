@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { journalAPI, JournalEntry } from '@/lib/journalAPI';
 
 interface Article {
   id: string;
@@ -10,44 +11,128 @@ interface Article {
   date: string;
   type: 'rss' | 'pdf';
   url?: string;
+  feed_id?: string;
+  content?: string;
+  author?: string;
+  tags?: string[];
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+interface FeedSubscription {
+  id: string;
+  url: string;
+  title: string;
+  description: string;
+  last_updated: string;
+  is_active: boolean;
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 export default function Feed() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [rssUrl, setRssUrl] = useState('');
+  const [feedName, setFeedName] = useState('');
   const [articles, setArticles] = useState<Article[]>([]);
+  const [subscriptions, setSubscriptions] = useState<FeedSubscription[]>([]);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // Journal state
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
+  const [journalContent, setJournalContent] = useState('');
+  const [journalTitle, setJournalTitle] = useState('');
+  const [journalLoading, setJournalLoading] = useState(false);
+  const [journalStatus, setJournalStatus] = useState<string>('');
+  const [isJournalOpen, setIsJournalOpen] = useState(false);
+  const saveTimerRef = useRef<number | null>(null);
 
   // Fetch articles from backend
   const fetchArticles = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/feeds`, {
+      console.log('Fetching articles from:', `${API_BASE}/api/feeds`);
+      const res = await fetch(`${API_BASE}/api/feeds`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
-      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
-      const data = await res.json();
-      // assume data is Article[]
-      setArticles(data);
+      console.log('Response status:', res.status);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Articles fetched:', data.length);
+        setArticles(data);
+      } else {
+        const errorText = await res.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to fetch articles: ${res.status}`);
+      }
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to load feeds');
+      console.error('Failed to fetch articles:', err.message);
+      setError('Failed to load articles. Please check if the backend is running.');
+      // Fallback to empty array instead of mock data
+      setArticles([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch feed subscriptions
+  const fetchSubscriptions = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/feeds/subscriptions`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubscriptions(data);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch subscriptions:', err.message);
+    }
+  };
+
+  // Refresh all feeds
+  const refreshFeeds = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/feeds/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSuccess(`Feeds refreshed! Found ${data.total_articles} articles.`);
+        await fetchArticles();
+        await fetchSubscriptions();
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        throw new Error(`Failed to refresh feeds: ${res.status}`);
+      }
+    } catch (err: any) {
+      console.error('Failed to refresh feeds:', err.message);
+      setError('Failed to refresh feeds. Please try again.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     fetchArticles();
-    // optionally set up polling or websockets for real-time updates
+    fetchSubscriptions();
+    // Set up automatic refresh every 5 minutes
+    const interval = setInterval(() => {
+      refreshFeeds();
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Simple URL validation for RSS
@@ -65,45 +150,107 @@ export default function Feed() {
       setError('Please enter a valid URL (https://...)');
       return;
     }
+    if (!feedName.trim()) {
+      setError('Please enter a name for the feed');
+      return;
+    }
     setAdding(true);
     setError(null);
-
-    // optimistic UI: add a temporary article/placeholder so UX feels snappy
-    const tempItem: Article = {
-      id: `temp-${Date.now()}`,
-      title: `Adding feed: ${rssUrl}`,
-      source: 'Adding…',
-      snippet: '',
-      date: new Date().toISOString().slice(0, 10),
-      type: 'rss',
-      url: rssUrl
-    };
-    setArticles((prev) => [tempItem, ...prev]);
-    setRssUrl('');
-    setShowAddFeed(false);
+    setSuccess(null);
 
     try {
-      const res = await fetch(`${API_BASE}/feeds`, {
+      console.log('Adding feed to:', `${API_BASE}/api/feeds`);
+      console.log('Feed URL:', rssUrl.trim());
+      console.log('Feed Name:', feedName.trim());
+      const res = await fetch(`${API_BASE}/api/feeds`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: rssUrl.trim() })
+        body: JSON.stringify({ 
+          url: rssUrl.trim(),
+          name: feedName.trim()
+        })
       });
-      if (!res.ok) {
-        // revert optimistic update on failure
-        setArticles((prev) => prev.filter((a) => a.id !== tempItem.id));
-        const txt = await res.text();
-        throw new Error(txt || `Add feed failed: ${res.status}`);
+      
+      console.log('Add feed response status:', res.status);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Feed added successfully:', data);
+        setSuccess(`Feed "${feedName.trim()}" added successfully! Found ${data.articles_count} articles.`);
+        setRssUrl('');
+        setFeedName('');
+        setShowAddFeed(false);
+        // Refresh articles and subscriptions
+        await fetchArticles();
+        await fetchSubscriptions();
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        const errorText = await res.text();
+        console.error('Error response:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { detail: errorText };
+        }
+        throw new Error(errorData.detail || `Failed to add feed: ${res.status}`);
       }
-      const created = await res.json();
-      // replace the temp item with the real created feed/article returned by backend
-      setArticles((prev) => {
-        return prev.map((a) => (a.id === tempItem.id ? created : a));
-      });
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to add feed');
+      console.error('Failed to add feed:', err.message);
+      setError(err.message || 'Failed to add feed. Please check the URL and try again.');
     } finally {
       setAdding(false);
+    }
+  };
+
+  // Delete feed subscription
+  const handleDeleteFeed = async (subscriptionId: string) => {
+    if (!confirm('Are you sure you want to delete this feed subscription? This will remove all articles from this feed.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/feeds/subscriptions/${subscriptionId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (res.ok) {
+        setSuccess('Feed subscription deleted successfully.');
+        await fetchArticles();
+        await fetchSubscriptions();
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        throw new Error(`Failed to delete feed: ${res.status}`);
+      }
+    } catch (err: any) {
+      console.error('Failed to delete feed:', err.message);
+      setError(err.message || 'Failed to delete feed.');
+    }
+  };
+
+  // Toggle feed status (activate/deactivate)
+  const handleToggleFeedStatus = async (subscriptionId: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/feeds/subscriptions/${subscriptionId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !currentStatus })
+      });
+      
+      if (res.ok) {
+        const newStatus = !currentStatus;
+        setSuccess(`Feed ${newStatus ? 'activated' : 'deactivated'} successfully`);
+        await fetchSubscriptions();
+        await fetchArticles();
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError('Failed to update feed status');
+        setTimeout(() => setError(null), 3000);
+      }
+    } catch (error) {
+      console.error('Failed to toggle feed status:', error);
+      setError('Failed to update feed status');
+      setTimeout(() => setError(null), 3000);
     }
   };
 
@@ -111,13 +258,130 @@ export default function Feed() {
     setSelectedArticle(article);
   };
 
+  // Journal functions
+  const fetchJournalEntries = async () => {
+    try {
+      const entries = await journalAPI.getAllJournals();
+      setJournalEntries(entries);
+      if (entries.length > 0 && !activeJournalId) {
+        setActiveJournalId(entries[0].id);
+        setJournalContent(entries[0].content || '');
+        setJournalTitle(entries[0].title);
+      }
+    } catch (error) {
+      console.error('Failed to fetch journal entries:', error);
+    }
+  };
+
+  const createJournalEntry = async () => {
+    try {
+      const title = `Notes on: ${selectedArticle?.title || 'Untitled'}`;
+      const content = selectedArticle ? 
+        `# ${selectedArticle.title}\n\n**Source:** ${selectedArticle.source}\n**Date:** ${selectedArticle.date}\n**URL:** ${selectedArticle.url || 'N/A'}\n\n---\n\n` : '';
+      
+      const entry = await journalAPI.createJournal({ title, content });
+      setJournalEntries(prev => [entry, ...prev]);
+      setActiveJournalId(entry.id);
+      setJournalContent(entry.content);
+      setJournalTitle(entry.title);
+      
+      // Open journal sidebar if it's closed
+      if (!isJournalOpen) {
+        setIsJournalOpen(true);
+      }
+    } catch (error) {
+      console.error('Failed to create journal entry:', error);
+    }
+  };
+
+  const saveJournalEntry = async () => {
+    if (!activeJournalId) return;
+    try {
+      setJournalStatus('Saving...');
+      await journalAPI.updateJournal(activeJournalId, {
+        title: journalTitle,
+        content: journalContent
+      });
+      setJournalStatus('Saved');
+      setTimeout(() => setJournalStatus(''), 2000);
+    } catch (error) {
+      console.error('Failed to save journal entry:', error);
+      setJournalStatus('Save failed');
+    }
+  };
+
+  const handleDeleteJournalEntry = async (entryId: string) => {
+    if (!confirm('Are you sure you want to delete this journal entry?')) {
+      return;
+    }
+
+    try {
+      setJournalStatus('Deleting...');
+      await journalAPI.deleteJournal(entryId);
+      
+      // Remove from the list
+      setJournalEntries(prev => prev.filter(entry => entry.id !== entryId));
+      
+      // If this was the active entry, clear it
+      if (activeJournalId === entryId) {
+        setActiveJournalId(null);
+        setJournalContent('');
+        setJournalTitle('');
+      }
+
+      setJournalStatus('Entry deleted');
+      setTimeout(() => setJournalStatus(''), 2000);
+    } catch (error) {
+      console.error('Failed to delete journal entry:', error);
+      setJournalStatus('Delete failed');
+      setTimeout(() => setJournalStatus(''), 3000);
+    }
+  };
+
+  // Auto-save journal content
+  useEffect(() => {
+    if (!activeJournalId) return;
+    
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    
+    saveTimerRef.current = window.setTimeout(() => {
+      saveJournalEntry();
+    }, 2000);
+    
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [journalContent, journalTitle, activeJournalId]);
+
+  // Load journal entries when component mounts
+  useEffect(() => {
+    fetchJournalEntries();
+  }, []);
+
   return (
     <div className="h-full flex">
+      {/* Left Article List */}
       <div className={`${selectedArticle ? 'w-1/3' : 'w-full'} border-r border-gray-200 dark:border-gray-700 flex flex-col`}>
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Feed</h2>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">RSS Feeds</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {articles.length} articles from {subscriptions.length} feeds
+              </p>
+            </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={refreshFeeds}
+                disabled={refreshing}
+                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 transition-colors"
+              >
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </button>
               <button
                 onClick={() => setShowAddFeed(!showAddFeed)}
                 className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -127,45 +391,120 @@ export default function Feed() {
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded ${viewMode === 'list' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                title="List view"
               >
-                list
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
               </button>
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-2 rounded ${viewMode === 'grid' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                title="Grid view"
               >
-                grid
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
               </button>
             </div>
           </div>
 
+          {/* Status Messages */}
+          {error && (
+            <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            </div>
+          )}
+          {success && (
+            <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <p className="text-sm text-green-600 dark:text-green-400">{success}</p>
+            </div>
+          )}
+
+          {/* Feed Subscriptions */}
+          {subscriptions.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Feed Subscriptions:</h3>
+              <div className="flex flex-wrap gap-2">
+                {subscriptions.map((sub) => (
+                  <div 
+                    key={sub.id} 
+                    className={`flex items-center gap-2 px-3 py-1 rounded-full cursor-pointer transition-colors ${
+                      sub.is_active 
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50' 
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                    onClick={() => handleToggleFeedStatus(sub.id, sub.is_active)}
+                    title={`Click to ${sub.is_active ? 'deactivate' : 'activate'} this feed`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${sub.is_active ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                    <span className="text-xs">{sub.title}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteFeed(sub.id);
+                      }}
+                      className="text-xs text-red-500 hover:text-red-700 ml-1"
+                      title="Delete feed"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Click on feeds to activate/deactivate them. Green = active, Gray = inactive.
+              </p>
+            </div>
+          )}
+
           {showAddFeed && (
             <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="flex items-center gap-3">
-                <input
-                  type="url"
-                  value={rssUrl}
-                  onChange={(e) => setRssUrl(e.target.value)}
-                  placeholder="Enter RSS feed URL (e.g., https://example.com/feed.xml)"
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <button
-                  onClick={handleAddFeed}
-                  disabled={!rssUrl.trim() || adding}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  {adding ? 'Adding…' : 'Add Feed'}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAddFeed(false);
-                    setRssUrl('');
-                    setError(null);
-                  }}
-                  className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Feed Name
+                  </label>
+                  <input
+                    type="text"
+                    value={feedName}
+                    onChange={(e) => setFeedName(e.target.value)}
+                    placeholder="Enter a name for this feed (e.g., TechCrunch, My Blog)"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    RSS Feed URL
+                  </label>
+                  <input
+                    type="url"
+                    value={rssUrl}
+                    onChange={(e) => setRssUrl(e.target.value)}
+                    placeholder="Enter RSS feed URL (e.g., https://example.com/feed.xml)"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleAddFeed}
+                    disabled={!rssUrl.trim() || !feedName.trim() || adding}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {adding ? 'Adding…' : 'Add Feed'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddFeed(false);
+                      setRssUrl('');
+                      setFeedName('');
+                      setError(null);
+                    }}
+                    className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Popular RSS feeds: TechCrunch, Ars Technica, The Verge, etc.</p>
               {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
@@ -187,9 +526,35 @@ export default function Feed() {
                   <div className="flex items-start gap-3">
                     <div className={`w-2 h-2 rounded-full mt-2 ${article.type === 'rss' ? 'bg-green-500' : 'bg-blue-500'}`} />
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 dark:text-white truncate">{article.title}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{article.source} • {article.date}</p>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-gray-900 dark:text-white truncate flex-1">{article.title}</h3>
+                        {journalEntries.some(entry => entry.title.includes(article.title)) && (
+                          <span className="text-xs text-blue-600 dark:text-blue-400" title="Has notes">
+                            📝
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{article.source}</p>
+                        <span className="text-xs text-gray-400">•</span>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{article.date}</p>
+                        {article.author && (
+                          <>
+                            <span className="text-xs text-gray-400">•</span>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">by {article.author}</p>
+                          </>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-500 dark:text-gray-500 mt-2 line-clamp-2">{article.snippet}</p>
+                      {article.tags && article.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {article.tags.slice(0, 3).map((tag, index) => (
+                            <span key={index} className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -224,7 +589,13 @@ export default function Feed() {
               </div>
               <div className="flex items-center gap-2">
                 <button className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">Summarize</button>
-                <button className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Save to Journal</button>
+                <button 
+                  onClick={createJournalEntry}
+                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                  title="Create note for this article"
+                >
+                  📝 Note
+                </button>
                 <button onClick={() => setSelectedArticle(null)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -235,12 +606,186 @@ export default function Feed() {
           </div>
           <div className="flex-1 p-6 overflow-auto">
             <div className="prose prose-gray dark:prose-invert max-w-none">
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{selectedArticle.snippet}</p>
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed mt-4">This is a placeholder for the full article content. In a real implementation, this would display the actual article text, PDF content, or embedded reader view.</p>
+              {selectedArticle.content ? (
+                <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                  {selectedArticle.content}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{selectedArticle.snippet}</p>
+                  {selectedArticle.url && (
+                    <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <p className="text-sm text-blue-600 dark:text-blue-400 mb-2">Read the full article:</p>
+                      <a 
+                        href={selectedArticle.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+                      >
+                        {selectedArticle.url}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {selectedArticle.tags && selectedArticle.tags.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tags:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedArticle.tags.map((tag, index) => (
+                      <span key={index} className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Right Journal Sidebar */}
+      <div className={`${isJournalOpen ? 'w-80' : 'w-12'} transition-all duration-200 border-l border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-gray-900`}>
+        {isJournalOpen ? (
+          <>
+            {/* Journal Header */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Journal</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={createJournalEntry}
+                    className="px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                    title="New note"
+                  >
+                    + New
+                  </button>
+                  <button
+                    onClick={() => setIsJournalOpen(false)}
+                    className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    title="Close journal"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              {journalStatus && (
+                <p className="text-xs text-gray-500 mt-1">{journalStatus}</p>
+              )}
+            </div>
+
+            {/* Journal Entries List */}
+            <div className="flex-1 overflow-auto border-b border-gray-200 dark:border-gray-700">
+              {journalEntries.length === 0 ? (
+                <div className="p-4 text-sm text-gray-500 text-center">
+                  No journal entries yet
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {journalEntries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className={`p-3 hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                        activeJournalId === entry.id ? 'bg-blue-50 dark:bg-blue-900/20 border-r-2 border-blue-500' : ''
+                      }`}
+                    >
+                      <div 
+                        onClick={() => {
+                          setActiveJournalId(entry.id);
+                          setJournalContent(entry.content || '');
+                          setJournalTitle(entry.title);
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <h4 className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                          {entry.title}
+                        </h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {new Date(entry.updated_at).toLocaleDateString()}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                          {(entry.content || '').slice(0, 100)}...
+                        </p>
+                      </div>
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteJournalEntry(entry.id);
+                          }}
+                          className="p-1 text-red-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                          title="Delete entry"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Journal Editor */}
+            <div className="flex-1 flex flex-col">
+              {activeJournalId ? (
+                <>
+                  <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={journalTitle}
+                        onChange={(e) => setJournalTitle(e.target.value)}
+                        className="flex-1 text-sm font-medium bg-transparent border-0 focus:outline-none text-gray-900 dark:text-white"
+                        placeholder="Journal title"
+                      />
+                      <button
+                        onClick={() => handleDeleteJournalEntry(activeJournalId)}
+                        className="p-1 text-red-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                        title="Delete this entry"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1 p-3">
+                    <textarea
+                      value={journalContent}
+                      onChange={(e) => setJournalContent(e.target.value)}
+                      placeholder="Write your notes here..."
+                      className="w-full h-full resize-none border-0 bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none text-sm"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center text-gray-500">
+                    <p className="text-sm">Select a journal entry or create a new one</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="p-2">
+            <button
+              onClick={() => setIsJournalOpen(true)}
+              className="w-full p-2 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              title="Open journal"
+            >
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

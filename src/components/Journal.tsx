@@ -3,12 +3,9 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  getAllJournals,
-  createJournal,
-  updateJournal,
-  deleteJournal,
+  journalAPI,
   JournalEntry
-} from '@/lib/journalDB';
+} from '@/lib/journalAPI';
 
 function formatDate(iso?: string) {
   if (!iso) return '';
@@ -30,12 +27,17 @@ export default function Journal() {
   // load
   useEffect(() => {
     (async () => {
-      const all = await getAllJournals();
-      setEntries(all);
-      if (all.length) {
-        setActiveId(all[0].id);
-        setEditorContent(all[0].content || '');
-        setTitleEditing(all[0].title);
+      try {
+        const all = await journalAPI.getAllJournals();
+        setEntries(all);
+        if (all.length) {
+          setActiveId(all[0].id);
+          setEditorContent(all[0].content || '');
+          setTitleEditing(all[0].title);
+        }
+      } catch (error) {
+        console.error('Failed to load journals:', error);
+        setStatus('Failed to load journals');
       }
     })();
   }, []);
@@ -49,28 +51,39 @@ export default function Journal() {
 
   // helper to refresh list
   async function refreshList(selectId?: string | null) {
-    const all = await getAllJournals();
-    setEntries(all);
-    if (selectId) {
-      setActiveId(selectId);
-    } else if (!all.length) {
-      setActiveId(null);
-      setEditorContent('');
-      setTitleEditing('');
+    try {
+      const all = await journalAPI.getAllJournals();
+      setEntries(all);
+      if (selectId) {
+        setActiveId(selectId);
+      } else if (!all.length) {
+        setActiveId(null);
+        setEditorContent('');
+        setTitleEditing('');
+      }
+    } catch (error) {
+      console.error('Failed to refresh journals:', error);
+      setStatus('Failed to refresh journals');
     }
   }
 
   // add new
   async function handleAdd() {
     setIsAdding(true);
-    const title = window.prompt('Title for your new journal', `Journal ${entries.length + 1}`) || `Journal ${entries.length + 1}`;
-    const created = await createJournal(title, '');
-    await refreshList(created.id);
-    setIsAdding(false);
-    // focus
-    setTimeout(() => {
-      setActiveId(created.id);
-    }, 10);
+    try {
+      const title = window.prompt('Title for your new journal', `Journal ${entries.length + 1}`) || `Journal ${entries.length + 1}`;
+      const created = await journalAPI.createJournal({ title, content: '' });
+      await refreshList(created.id);
+      setIsAdding(false);
+      // focus
+      setTimeout(() => {
+        setActiveId(created.id);
+      }, 10);
+    } catch (error) {
+      console.error('Failed to create journal:', error);
+      setStatus('Failed to create journal');
+      setIsAdding(false);
+    }
   }
 
   // delete
@@ -78,25 +91,32 @@ export default function Journal() {
     const toDelete = id || activeId;
     if (!toDelete) return;
     if (!confirm('Delete this journal? This cannot be undone.')) return;
-    await deleteJournal(toDelete);
-    await refreshList();
+    try {
+      await journalAPI.deleteJournal(toDelete);
+      await refreshList();
+    } catch (error) {
+      console.error('Failed to delete journal:', error);
+      setStatus('Failed to delete journal');
+    }
   }
 
   // save (manual)
   async function handleSaveNow() {
     if (!activeId) return;
     setStatus('Saving…');
-    const entry = entries.find((e) => e.id === activeId);
-    if (!entry) return;
-    const updated = await updateJournal({
-      ...entry,
-      content: editorContent,
-      title: titleEditing
-    });
-    // update local state
-    setEntries((prev) => [updated, ...prev.filter((p) => p.id !== updated.id)]);
-    setStatus('Saved');
-    setTimeout(() => setStatus(''), 1200);
+    try {
+      const updated = await journalAPI.updateJournal(activeId, {
+        content: editorContent,
+        title: titleEditing
+      });
+      // update local state
+      setEntries((prev) => [updated, ...prev.filter((p) => p.id !== updated.id)]);
+      setStatus('Saved');
+      setTimeout(() => setStatus(''), 1200);
+    } catch (error) {
+      console.error('Failed to save journal:', error);
+      setStatus('Failed to save journal');
+    }
   }
 
   // debounce autosave
@@ -108,17 +128,20 @@ export default function Journal() {
     }
     saveTimerRef.current = window.setTimeout(() => {
       (async () => {
-        const entry = entries.find((e) => e.id === activeId);
-        if (!entry) return;
-        await updateJournal({
-          ...entry,
-          content: editorContent,
-          title: titleEditing
-        });
-        const all = await getAllJournals();
-        setEntries(all);
-        setStatus('Auto-saved');
-        setTimeout(() => setStatus(''), 1000);
+        if (!activeId) return;
+        try {
+          await journalAPI.updateJournal(activeId, {
+            content: editorContent,
+            title: titleEditing
+          });
+          const all = await journalAPI.getAllJournals();
+          setEntries(all);
+          setStatus('Auto-saved');
+          setTimeout(() => setStatus(''), 1000);
+        } catch (error) {
+          console.error('Auto-save failed:', error);
+          setStatus('Auto-save failed');
+        }
       })();
     }, 1200); // 1.2s after user stops typing
     return () => {
@@ -137,9 +160,14 @@ export default function Journal() {
     const newTitle = prompt('Rename journal', current?.title || '') || current?.title;
     if (!newTitle) return;
     if (!current) return;
-    const updated = await updateJournal({ ...current, title: newTitle });
-    setEntries((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    if (activeId === updated.id) setTitleEditing(updated.title);
+    try {
+      const updated = await journalAPI.updateJournal(target, { title: newTitle });
+      setEntries((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      if (activeId === updated.id) setTitleEditing(updated.title);
+    } catch (error) {
+      console.error('Failed to rename journal:', error);
+      setStatus('Failed to rename journal');
+    }
   }
 
   // quick download (optional)
@@ -214,7 +242,7 @@ export default function Journal() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <h4 className="font-medium text-sm text-gray-900 dark:text-white truncate">{e.title}</h4>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{formatDate(e.updatedAt).split(',')[0]}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">{formatDate(e.updated_at).split(',')[0]}</div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{(e.content || '').slice(0, 200)}</p>
                 </div>
@@ -248,16 +276,19 @@ export default function Journal() {
               onChange={(e) => setTitleEditing(e.target.value)}
               onBlur={async () => {
                 if (!activeId) return;
-                const entry = entries.find((x) => x.id === activeId);
-                if (!entry) return;
-                await updateJournal({ ...entry, title: titleEditing });
-                const all = await getAllJournals();
-                setEntries(all);
+                try {
+                  await journalAPI.updateJournal(activeId, { title: titleEditing });
+                  const all = await journalAPI.getAllJournals();
+                  setEntries(all);
+                } catch (error) {
+                  console.error('Failed to update title:', error);
+                  setStatus('Failed to update title');
+                }
               }}
               placeholder="Journal title"
               className="w-full text-xl font-semibold bg-transparent border-0 focus:outline-none"
             />
-            <div className="text-xs text-gray-500 mt-1">{status || (activeId ? `Last saved: ${formatDate(entries.find((x) => x.id === activeId)?.updatedAt)}` : '')}</div>
+            <div className="text-xs text-gray-500 mt-1">{status || (activeId ? `Last saved: ${formatDate(entries.find((x) => x.id === activeId)?.updated_at)}` : '')}</div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -292,9 +323,9 @@ export default function Journal() {
 
         <div className="p-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="text-xs text-gray-500">
-            {activeId ? `${(entries.find((x) => x.id === activeId)?.wordCount || 0)} words` : ''}
+            {activeId ? `${(entries.find((x) => x.id === activeId)?.word_count || 0)} words` : ''}
           </div>
-          <div className="text-xs text-gray-500">Autosaves to local browser storage (IndexedDB)</div>
+          <div className="text-xs text-gray-500">Autosaves to backend with localStorage fallback</div>
         </div>
       </div>
     </div>

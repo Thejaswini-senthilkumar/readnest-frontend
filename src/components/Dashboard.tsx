@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Navbar from './Navbar';
 import Feed from './Feed';
 import RightSidebar from './RightSidebar';
-import Journal from '@/components/Journal'; // ⬅️ NEW import
 
 export default function Dashboard() {
   const [activeSection, setActiveSection] = useState('feed');
@@ -23,9 +22,6 @@ export default function Dashboard() {
     switch (activeSection) {
       case 'feed':
         return <Feed />;
-      case 'journal':
-        // ⬅️ Replaced placeholder with real Journal UI
-        return <Journal />;
       case 'assistant':
         return (
           <div className="p-6">
@@ -60,8 +56,6 @@ export default function Dashboard() {
       <Navbar
         activeSection={activeSection}
         onSectionChange={setActiveSection}
-        isRightSidebarOpen={isRightSidebarOpen}
-        onToggleRightSidebar={handleToggleRightSidebar}
       />
 
       {/* Main Content Area */}

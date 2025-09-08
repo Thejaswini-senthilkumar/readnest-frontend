@@ -5,15 +5,11 @@ import { useState, useEffect, useRef } from 'react';
 interface NavbarProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
-  isRightSidebarOpen: boolean;
-  onToggleRightSidebar: () => void;
 }
 
 export default function Navbar({ 
   activeSection, 
-  onSectionChange, 
-  isRightSidebarOpen, 
-  onToggleRightSidebar 
+  onSectionChange
 }: NavbarProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -33,7 +29,6 @@ export default function Navbar({
 
   const navigationItems = [
     { id: 'feed', label: 'Feed' },
-    { id: 'journal', label: 'Journal' },
     { id: 'assistant', label: 'Assistant' },
   ];
 
@@ -92,20 +87,6 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Journal Toggle Button */}
-        <button
-          onClick={onToggleRightSidebar}
-          className={`p-2 rounded-lg transition-colors ${
-            isRightSidebarOpen
-              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
-          title="Toggle Journal"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-        </button>
 
         {/* User Avatar and Dropdown */}
         <div className="relative" ref={dropdownRef}>
