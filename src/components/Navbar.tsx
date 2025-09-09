@@ -28,7 +28,8 @@ export default function Navbar({
   }, []);
 
   const navigationItems = [
-    { id: 'feed', label: 'Feed' },
+    { id: 'feed', label: 'Read' },
+    { id: 'research', label: 'Research' },
     { id: 'assistant', label: 'Assistant' },
   ];
 
