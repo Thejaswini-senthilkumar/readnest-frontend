@@ -22,65 +22,84 @@ export default function ScholarSidebar({ isOpen = true, onClose }: ScholarSideba
   const [results, setResults] = useState<Paper[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const runSearch = async () => {
-    if (!query.trim()) return;
-    setLoading(true);
-    setError(null);
-    setResults([]);
+// inside ScholarSidebar.tsx — replace existing runSearch with the code below
+const runSearch = async () => {
+  if (!query.trim()) return;
+  setLoading(true);
+  setError(null);
+  setResults([]);
 
-    try {
-      // 1) Call backend feed/article search that exists: /api/feeds/search/{query}
-      const searchUrl = `${API_BASE}/api/feeds/search/${encodeURIComponent(query)}`;
-      const searchRes = await fetch(searchUrl);
-      if (!searchRes.ok) {
-        const txt = await searchRes.text();
-        throw new Error(`Search API failed: ${searchRes.status} ${txt}`);
+  try {
+    // 1) Try local content search first
+    const searchUrl = `${API_BASE}/api/feeds/search/${encodeURIComponent(query)}`;
+    const searchRes = await fetch(searchUrl);
+    if (!searchRes.ok) {
+      const txt = await searchRes.text();
+      console.warn('Local search failed:', searchRes.status, txt);
+    }
+    const searchData = (await searchRes.json()) || [];
+
+    let papersForAgent = (searchData || []).map((a: any) => ({
+      title: a.title || "",
+      abstract: a.snippet || a.content || "",
+      url: a.url || a.link || ""
+    }));
+
+    // 2) If local search returned nothing, fall back to Semantic Scholar endpoint
+    if (!papersForAgent.length) {
+      console.log('No local results — falling back to /api/search (Semantic Scholar)');
+      const remoteRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&top_k=8`);
+      if (!remoteRes.ok) {
+        const txt = await remoteRes.text();
+        throw new Error(`Remote search failed: ${remoteRes.status} ${txt}`);
       }
-      const searchData = await searchRes.json();
+      const remoteJson = await remoteRes.json();
+      // /api/search returns { results: [ { title, summary, link } ] }
+      const remoteResults = remoteJson.results || [];
+      papersForAgent = remoteResults.map((p: any) => ({
+        title: p.title || "",
+        abstract: p.summary || p.abstract || "",
+        url: p.link || p.url || ""
+      }));
+    }
 
-      // searchData is array of Article objects from backend -> adapt to agent input
-      // prepare papers list for scholar agent; pick relevant fields
-      const papersForAgent = (searchData || []).map((a: any) => ({
-        title: a.title || "",
-        abstract: a.snippet || a.content || "",
-        url: a.url || a.link || ""
+    if (!papersForAgent.length) {
+      setError('No papers found locally or remotely for that query.');
+      return;
+    }
+
+    // 3) Call scholar-agent to summarize the papers (LLM)
+    const agentRes = await fetch(`${API_BASE}/api/scholar-agent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_prompt: query,
+        papers: papersForAgent
+      }),
+    });
+    if (!agentRes.ok) {
+      const txt = await agentRes.text();
+      throw new Error(`Scholar Agent failed: ${agentRes.status} ${txt}`);
+    }
+    const agentData = await agentRes.json();
+    const agentResults = agentData.results ?? agentData ?? [];
+
+    // Normalize results for UI
+    const normalized: Paper[] = (Array.isArray(agentResults) ? agentResults : [])
+      .map((r: any) => ({
+        title: r.title || r.name || r.title_text || "Untitled",
+        summary: r.summary || r.abstract || (r.snippet && String(r.snippet).slice(0, 300)) || "",
+        link: r.link || r.url || r.pdf || ""
       }));
 
-      // 2) Call scholar agent with the papers
-      const agentRes = await fetch(`${API_BASE}/api/scholar-agent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_prompt: query,
-          papers: papersForAgent
-        }),
-      });
-      if (!agentRes.ok) {
-        const txt = await agentRes.text();
-        throw new Error(`Scholar Agent failed: ${agentRes.status} ${txt}`);
-      }
-      const agentData = await agentRes.json();
-
-      // agentData should return { results: ... } according to your scholar_agent
-      // The scholar_agent currently returns whatever graph.compile() produces; handle both shapes
-      const agentResults = agentData.results ?? agentData ?? [];
-
-      // Normalize into Paper[] with title/summary/link for UI
-      const normalized: Paper[] = (Array.isArray(agentResults) ? agentResults : [])
-        .map((r: any) => ({
-          title: r.title || r.name || r.title_text || "Untitled",
-          summary: r.summary || r.abstract || (r.snippet && String(r.snippet).slice(0, 300)) || "",
-          link: r.link || r.url || r.pdf || ""
-        }));
-
-      setResults(normalized);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
+    setResults(normalized);
+  } catch (err: any) {
+    console.error(err);
+    setError(err.message || "Something went wrong");
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (!isOpen) return null;
 
