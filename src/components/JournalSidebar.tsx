@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import ScholarSidebar from "./ScholarSidebar";
+
 
 interface JournalEntry {
   id: string;
@@ -32,6 +34,7 @@ interface JournalSidebarProps {
 const STORAGE_KEY = 'readnest_journal_entries';
 
 export default function JournalSidebar({ isOpen, onClose, currentContent }: JournalSidebarProps) {
+  const [activeTab, setActiveTab] = useState<"journal" | "scholar">("journal");
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
   const [journalContent, setJournalContent] = useState('');
@@ -204,21 +207,22 @@ export default function JournalSidebar({ isOpen, onClose, currentContent }: Jour
   );
 
   if (!isOpen) {
-    return (
-      <div className="w-12 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col">
-        <div className="p-2">
-          <button
-            onClick={onClose}
-            className="w-full p-2 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            title="Open journal"
-          >
-            <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    );
+    return null;
+    //(
+    //   <div className="w-12 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col">
+    //     <div className="p-2">
+    //       <button
+    //         onClick={onClose}
+    //         className="w-full p-2 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+    //         title="Open journal"
+    //       >
+    //         <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    //           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    //         </svg>
+    //       </button>
+    //     </div>
+    //   </div>
+    // );
   }
 
   return (
