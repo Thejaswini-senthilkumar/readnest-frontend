@@ -6,13 +6,14 @@ import Feed from './Feed';
 import DocumentUpload from './DocumentUpload';
 import LeftSidebar from './LeftSidebar';
 import JournalSidebar from './JournalSidebar';
-import ScholarSidebar from './ScholarSidebar';
+import Research from './Research';
+import Notes from './Notes';
+import AIAssistant from './AIAssistant';
 
 export default function Dashboard() {
   const [activeSection, setActiveSection] = useState('feed');
   const [activeTab, setActiveTab] = useState<'rss' | 'pdf'>('rss');
   const [isJournalOpen, setIsJournalOpen] = useState(false);
-  const [isScholarOpen, setIsScholarOpen] = useState(false);
   const [currentContent, setCurrentContent] = useState<{
     type: 'rss' | 'pdf';
     title: string;
@@ -31,26 +32,11 @@ export default function Dashboard() {
           <Feed onContentSelect={setCurrentContent} /> : 
           <DocumentUpload onContentSelect={setCurrentContent} />;
       case 'research':
-        return (
-          <div className="p-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Research</h2>
-            <p className="text-gray-600 dark:text-gray-400">In Development</p>
-          </div>
-        );
+        return <Research />;
+      case 'notes':
+        return <Notes />;
       case 'assistant':
-        return (
-          <div className="p-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-              AI Assistant
-            </h2>
-            <div className="text-gray-600 dark:text-gray-400">
-              <p>Ask questions and get AI-powered summaries here.</p>
-              <p className="mt-2">
-                In Development
-              </p>
-            </div>
-          </div>
-        );
+        return <AIAssistant />;
       default:
         return (
           <div className="p-6">
@@ -88,41 +74,27 @@ export default function Dashboard() {
           {renderMainContent()}
         </main>
 
-        {/* Right-side single stacked icon rail */}
-        <div className="flex flex-col items-center gap-2 p-2">
-          {/* Journal icon */}
-          <button
-            onClick={() => setIsJournalOpen(prev => !prev)}
-            className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            title="Open Journal"
-          >
-            <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-
-          {/* Scholar icon */}
-          <button
-            onClick={() => setIsScholarOpen(prev => !prev)}
-            className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-            title="Open Scholar"
-          >
-            <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2l7 4v6c0 5-3.582 9.512-7 10-3.418-.488-7-5-7-10V6l7-4z" />
-            </svg>
-          </button>
-        </div>
+        {/* Right-side single stacked icon rail - only show when sidebar is closed */}
+        {!isJournalOpen && (
+          <div className="flex flex-col items-center gap-2 p-2 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700">
+            {/* Journal icon */}
+            <button
+              onClick={() => setIsJournalOpen(prev => !prev)}
+              className="w-10 h-10 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+              title="Open Journal"
+            >
+              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* Sidebars (render only expanded drawers) */}
         <JournalSidebar
           isOpen={isJournalOpen}
           currentContent={currentContent}
           onClose={() => setIsJournalOpen(false)}
-        />
-
-        <ScholarSidebar
-          isOpen={isScholarOpen}
-          onClose={() => setIsScholarOpen(false)}
         />
       </div>
     </div>

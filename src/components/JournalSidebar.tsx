@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import ScholarSidebar from "./ScholarSidebar";
 
 
 interface JournalEntry {
@@ -34,7 +33,6 @@ interface JournalSidebarProps {
 const STORAGE_KEY = 'readnest_journal_entries';
 
 export default function JournalSidebar({ isOpen, onClose, currentContent }: JournalSidebarProps) {
-  const [activeTab, setActiveTab] = useState<"journal" | "scholar">("journal");
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [activeJournalId, setActiveJournalId] = useState<string | null>(null);
   const [journalContent, setJournalContent] = useState('');
@@ -226,7 +224,7 @@ export default function JournalSidebar({ isOpen, onClose, currentContent }: Jour
   }
 
   return (
-    <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col">
+    <div className="fixed top-16 right-0 w-80 h-[calc(100vh-4rem)] border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col z-40 shadow-lg">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-3">

@@ -40,6 +40,7 @@ export default function Feed({ onContentSelect }: FeedProps) {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showAddFeed, setShowAddFeed] = useState(false);
+  const [isFeedMinimized, setIsFeedMinimized] = useState(false);
   const [rssUrl, setRssUrl] = useState('');
   const [feedName, setFeedName] = useState('');
   const [articles, setArticles] = useState<Article[]>([]);
@@ -265,50 +266,81 @@ export default function Feed({ onContentSelect }: FeedProps) {
     }
   };
 
+
   return (
     <div className="h-full flex">
       {/* Article List */}
-      <div className={`${selectedArticle ? 'w-1/2' : 'w-full'} border-r border-gray-200 dark:border-gray-700 flex flex-col`}>
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className={`${selectedArticle ? (isFeedMinimized ? 'w-12' : 'w-1/3') : 'w-full'} border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300`}>
+        <div className="p-3 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">RSS Feeds</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {articles.length} articles from {subscriptions.length} feeds
-              </p>
-            </div>
+            {!isFeedMinimized && (
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">RSS Feeds</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {articles.length} articles from {subscriptions.length} feeds
+                </p>
+              </div>
+            )}
+            {isFeedMinimized && (
+              <div className="flex flex-col items-center justify-center h-full">
+                {/* Empty space - no text when minimized */}
+              </div>
+            )}
             <div className="flex items-center gap-2">
-              <button
-                onClick={refreshFeeds}
-                disabled={refreshing}
-                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 transition-colors"
-              >
-                {refreshing ? 'Refreshing...' : 'Refresh'}
-              </button>
-              <button
-                onClick={() => setShowAddFeed(!showAddFeed)}
-                className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-              >
-                + Add RSS Feed
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded ${viewMode === 'list' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                title="List view"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded ${viewMode === 'grid' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                title="Grid view"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-              </button>
+              {selectedArticle && (
+                <button
+                  onClick={() => setIsFeedMinimized(!isFeedMinimized)}
+                  className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                  title={isFeedMinimized ? "Expand RSS feeds" : "Minimize RSS feeds"}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {isFeedMinimized ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    )}
+                  </svg>
+                </button>
+              )}
+              {!isFeedMinimized && (
+                <>
+                  <button
+                    onClick={refreshFeeds}
+                    disabled={refreshing}
+                    className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 transition-colors"
+                  >
+                    {refreshing ? 'Refreshing...' : 'Refresh'}
+                  </button>
+                  <button
+                    onClick={() => setShowAddFeed(!showAddFeed)}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  >
+                    + Add RSS Feed
+                  </button>
+                </>
+              )}
+              {!isFeedMinimized && (
+                <>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-2 rounded ${viewMode === 'list' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    title="List view"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-2 rounded ${viewMode === 'grid' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                    title="Grid view"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -325,7 +357,7 @@ export default function Feed({ onContentSelect }: FeedProps) {
           )}
 
           {/* Feed Subscriptions */}
-          {subscriptions.length > 0 && (
+          {!isFeedMinimized && subscriptions.length > 0 && (
             <div className="mt-4">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Feed Subscriptions:</h3>
               <div className="flex flex-wrap gap-2">
@@ -355,9 +387,11 @@ export default function Feed({ onContentSelect }: FeedProps) {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Click on feeds to activate/deactivate them. Green = active, Gray = inactive.
-              </p>
+              {!isFeedMinimized && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Click on feeds to activate/deactivate them. Green = active, Gray = inactive.
+                </p>
+              )}
             </div>
           )}
 
@@ -416,7 +450,11 @@ export default function Feed({ onContentSelect }: FeedProps) {
         </div>
 
         <div className="flex-1 overflow-auto">
-          {loading ? (
+          {isFeedMinimized ? (
+            <div className="flex flex-col items-center justify-center h-full">
+              {/* Empty space - no text when minimized */}
+            </div>
+          ) : loading ? (
             <div className="p-6 text-center text-gray-500">Loading feeds…</div>
           ) : viewMode === 'list' ? (
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -424,7 +462,7 @@ export default function Feed({ onContentSelect }: FeedProps) {
                 <div
                   key={article.id}
                   onClick={() => handleArticleClick(article)}
-                  className={`p-4 cursor-pointer transition-colors ${selectedArticle?.id === article.id ? 'bg-blue-50 dark:bg-blue-900/20 border-r-2 border-blue-500' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  className={`p-3 cursor-pointer transition-colors ${selectedArticle?.id === article.id ? 'bg-blue-50 dark:bg-blue-900/20 border-r-2 border-blue-500' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-2 h-2 rounded-full mt-2 ${article.type === 'rss' ? 'bg-green-500' : 'bg-blue-500'}`} />
@@ -465,7 +503,7 @@ export default function Feed({ onContentSelect }: FeedProps) {
                 <div
                   key={article.id}
                   onClick={() => handleArticleClick(article)}
-                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${selectedArticle?.id === article.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
+                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedArticle?.id === article.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
                 >
                   <div className={`w-2 h-2 rounded-full mb-2 ${article.type === 'rss' ? 'bg-green-500' : 'bg-blue-500'}`} />
                   <h3 className="font-medium text-gray-900 dark:text-white text-sm line-clamp-2">{article.title}</h3>
@@ -496,7 +534,7 @@ export default function Feed({ onContentSelect }: FeedProps) {
                   })}
                   className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
                 >
-                  📝 Link to Journal
+                  Link to Journal
                 </button>
                 <button onClick={() => setSelectedArticle(null)} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
