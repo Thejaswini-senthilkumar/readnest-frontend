@@ -3,25 +3,31 @@
 import { useState } from 'react';
 import Navbar from './Navbar';
 import Feed from './Feed';
-import RightSidebar from './RightSidebar';
+import DocumentUpload from './DocumentUpload';
+import LeftSidebar from './LeftSidebar';
+import JournalSidebar from './JournalSidebar';
 
 export default function Dashboard() {
   const [activeSection, setActiveSection] = useState('feed');
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
-  const [currentArticle, setCurrentArticle] = useState<{
+  const [activeTab, setActiveTab] = useState<'rss' | 'pdf'>('rss');
+  const [isJournalOpen, setIsJournalOpen] = useState(false);
+  const [currentContent, setCurrentContent] = useState<{
+    type: 'rss' | 'pdf';
     title: string;
     url?: string;
-    type: 'rss' | 'pdf';
+    id?: string;
   } | null>(null);
 
-  const handleToggleRightSidebar = () => {
-    setIsRightSidebarOpen(!isRightSidebarOpen);
+  const handleToggleJournal = () => {
+    setIsJournalOpen(!isJournalOpen);
   };
 
   const renderMainContent = () => {
     switch (activeSection) {
       case 'feed':
-        return <Feed />;
+        return activeTab === 'rss' ? 
+          <Feed onContentSelect={setCurrentContent} /> : 
+          <DocumentUpload onContentSelect={setCurrentContent} />;
       case 'assistant':
         return (
           <div className="p-6">
@@ -60,16 +66,24 @@ export default function Dashboard() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar - Only show for feed section */}
+        {activeSection === 'feed' && (
+          <LeftSidebar
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+          />
+        )}
+
         {/* Main Content */}
         <main className="flex-1 bg-white dark:bg-gray-900">
           {renderMainContent()}
         </main>
 
-        {/* Right Sidebar */}
-        <RightSidebar
-          isOpen={isRightSidebarOpen}
-          currentArticle={currentArticle}
-          onClose={handleToggleRightSidebar}
+        {/* Journal Sidebar */}
+        <JournalSidebar
+          isOpen={isJournalOpen}
+          currentContent={currentContent}
+          onClose={handleToggleJournal}
         />
       </div>
     </div>
