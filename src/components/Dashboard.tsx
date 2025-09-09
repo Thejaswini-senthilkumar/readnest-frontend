@@ -28,6 +28,13 @@ export default function Dashboard() {
         return activeTab === 'rss' ? 
           <Feed onContentSelect={setCurrentContent} /> : 
           <DocumentUpload onContentSelect={setCurrentContent} />;
+      case 'research':
+        return (
+          <div className="p-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Research</h2>
+            <p className="text-gray-600 dark:text-gray-400">In Development</p>
+          </div>
+        );
       case 'assistant':
         return (
           <div className="p-6">
@@ -37,7 +44,7 @@ export default function Dashboard() {
             <div className="text-gray-600 dark:text-gray-400">
               <p>Ask questions and get AI-powered summaries here.</p>
               <p className="mt-2">
-                Chat-style interface with input box and AI responses.
+                In Development
               </p>
             </div>
           </div>
